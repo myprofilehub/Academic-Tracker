@@ -1,0 +1,23 @@
+# Virtual environment
+venv/
+*.venv/
+.venv/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# IDE and editor files
+.vscode/
+.idea/
+
+# Data files
+*.xlsx
+*.csv
+*.pdf
+
+# OS-specific files
+.DS_Store
+Thumbs.db
