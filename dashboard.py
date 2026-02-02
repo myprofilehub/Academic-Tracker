@@ -30,7 +30,7 @@ with head_center:
     """, unsafe_allow_html=True)
 with head_right:
     try:
-        st.image("HL_Logo.png", width=110)
+        st.image("HL_Logo.png", width=350)
     except:
         st.warning("HL_Logo.png not found")
 st.markdown("<hr style='border: 1px solid #1A3C6D; margin-top: 5px;'>", unsafe_allow_html=True)
