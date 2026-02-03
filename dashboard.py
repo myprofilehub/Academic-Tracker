@@ -18,21 +18,36 @@ st.markdown("""
 
 # 2. OFFICIAL HEADER SECTION
 head_left, head_center, head_right = st.columns([1, 4, 1])
+
 with head_left:
-    st.image("NM_Logo.png", width=140)
+    try:
+        st.image("NM_Logo.png", width=140)
+    except:
+        st.write("") 
+
 with head_center:
     st.markdown("""
         <div class='header-text'>
             <h1 style='margin-bottom: 0; font-size: 36px;'>Academic Progress Dashboard</h1>
             <h3 style='font-weight: 400; margin-top: 0;'>Naan Mudhalvan Skill Development Initiative</h3>
-            <p style='color: #666;'>Government of Tamil Nadu</p>
+            <p style='color: #666; margin-bottom: 0;'>Government of Tamil Nadu</p>
         </div>
     """, unsafe_allow_html=True)
+
 with head_right:
     try:
         st.image("HL_Logo.png", width=350)
     except:
-        st.warning("HL_Logo.png not found")
+        st.write("") 
+
+# --- NEW LOCATION: OUTSIDE THE COLUMNS ---
+st.markdown("""
+    <p style='text-align: left; font-weight: bold; font-size: 18px; margin-top: 10px; margin-bottom: 0;'>
+        <span style='color: #E74C3C;'>Course Name:</span> 
+        <span style='color: black;'>Data Analytics & Visualization</span>
+    </p>
+""", unsafe_allow_html=True)
+
 st.markdown("<hr style='border: 1px solid #1A3C6D; margin-top: 5px;'>", unsafe_allow_html=True)
 
 # 3. DATA ENGINE
