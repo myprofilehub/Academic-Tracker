@@ -23,9 +23,7 @@ st.markdown("""
     .border-red { border-bottom: 5px solid #E74C3C; }
     .card-title { font-size: 13px; color: #666; text-transform: uppercase; margin-bottom: 8px; font-weight: 600; }
     .card-value { font-size: 28px; font-weight: bold; color: #1A3C6D; }
-    .header-text { text-align: center; color: #1A3C6D; }
     div.stButton > button { background-color: #1A3C6D; color: white; border-radius: 5px; height: 3em; }
-    section[data-testid="stSidebar"] { background-color: #F1F3F6; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -43,45 +41,30 @@ def load_and_clean_data():
     response.raise_for_status() 
     excel_file = io.BytesIO(response.content)
     
-    # Load sheets (skiprows=4 correctly identifies the data starting after headers)
     tracker = pd.read_excel(excel_file, sheet_name='Intervention Tracker', skiprows=4)
     summary = pd.read_excel(excel_file, sheet_name='Summary')
 
-    # STEP 1: FORWARD FILL CATEGORICAL DATA FIRST
-    # We must fill labels (Trainer, College, etc.) BEFORE dropping any rows
-    # This ensures that merged trainer rows are kept and counted
     structural_cols = ['University Code', 'College Name', 'Trainer name', 'Batch Size', 'Start Date', 'End Date', 'Timing']
     existing_struct = [c for c in structural_cols if c in tracker.columns]
     tracker[existing_struct] = tracker[existing_struct].ffill()
 
-    # STEP 2: EXCLUDE THE SUMMARY ROW (Row 83)
-    # We remove the "Total" row to prevent doubling the dashboard numbers
     tracker = tracker[~tracker['College Name'].astype(str).str.contains('Total|Grand', case=False, na=False)]
     
-    # Remove truly empty rows (spacer rows)
-    #tracker = tracker.dropna(subset=['Sl. No'], how='all')
-
-    # STEP 3: FILL MERGED NUMERICAL DATA WITH 0
-    # Note: Using exact names with trailing spaces where they exist in the Excel file
     cols_to_fix = [
         'Students Count', 'Intervention Completed', 'Pending Intervention ',
-        'Batch Wise Weekly Hours Completed', 'Pending Hours Per Batch'
+        'Batch Wise Weekly Hours Completed', 'Pending Hours Per Batch', 'Batch Size'
     ]
     
     for col in cols_to_fix:
         if col in tracker.columns:
-            # Force numeric and fill merged blanks with 0 to match Excel's consolidated logic
             tracker[col] = pd.to_numeric(tracker[col], errors='coerce').fillna(0)
-            # Formatting as integers where appropriate
-            if 'Hours' not in col and 'Percentage' not in col:
+            if 'Hours' not in col and 'Percentage' not in col and 'Batch Size' not in col:
                 tracker[col] = tracker[col].astype(int)
 
-    # Convert selector columns to string to prevent sort errors (TypeError)
     for col in ['University Code', 'College Name', 'Trainer name']:
         if col in tracker.columns:
             tracker[col] = tracker[col].astype(str).replace('nan', 'Unknown')
 
-    # Percentage Logic (Matches misspelled 'Completeion' in source)
     tracker['Completion Percentage'] = pd.to_numeric(tracker['Completion Percentage'], errors='coerce')  
     tracker['Original_Val'] = tracker['Completion Percentage'] 
     tracker['Completion %'] = (tracker['Original_Val'] * 100).fillna(0).astype(int)
@@ -94,52 +77,90 @@ except Exception as e:
     st.error(f"Error loading data: {e}")
     st.stop()
 
-# 3. SIDEBAR NAVIGATION & FILTERS
+# 3. PAGE STATE
 if 'page' not in st.session_state: 
     st.session_state.page = "Home"
 
-with st.sidebar:
-    st.title("Control Panel")
-    if st.button("🏠 Home Dashboard", use_container_width=True): st.session_state.page = "Home"
-    if st.button("📊 Assessment Tracker", use_container_width=True): st.session_state.page = "Assessment"
-    
-    st.markdown("---")
-    u_code = st.multiselect("University Code", options=sorted(df["University Code"].unique()))
-    
-    temp_df = df.copy()
-    if u_code: temp_df = temp_df[temp_df["University Code"].isin(u_code)]
-    c_name = st.multiselect("College Name", options=sorted(temp_df["College Name"].unique()))
-    t_name = st.multiselect("Trainer name", options=sorted(df["Trainer name"].unique()))
-    
-    # Apply Filtering logic
-    filt_df = df.copy()
-    if u_code: filt_df = filt_df[filt_df["University Code"].isin(u_code)]
-    if c_name: filt_df = filt_df[filt_df["College Name"].isin(c_name)]
-    if t_name: filt_df = filt_df[filt_df["Trainer name"].isin(t_name)]
-    
-    st.markdown("---")
-    min_weekly = st.number_input("Min Weekly Hours Completed", min_value=0.0, value=0.0, step=0.5)
-    filt_df = filt_df[filt_df["Batch Wise Weekly Hours Completed"] >= min_weekly]
-    
-    if st.button("🔄 Reset All Filters"): st.rerun()
-
-# 4. MAIN INTERFACE
+# 4. MAIN INTERFACE HEADER
 head_left, head_center, head_right = st.columns([1, 4, 1])
+
+with head_left:
+    st.image("NM_Logo.png", use_container_width=True)
+
 with head_center:
-    st.markdown("<div class='header-text'><h1 style='margin-bottom: 0;'>Academic Progress Dashboard</h1><h3>Naan Mudhalvan Skill Development Initiative</h3></div>", unsafe_allow_html=True)
+    st.markdown("""
+        <div style='text-align: center;'>
+            <h1 style='color: #1A3C6D; margin-bottom: 0; font-size: 42px;'>Academic Progress Dashboard</h1>
+            <h2 style='color: #1A3C6D; margin-top: 10px; margin-bottom: 0; font-weight: 400;'>Naan Mudhalvan Skill Development Initiative</h2>
+            <p style='color: #666; font-size: 16px; margin-top: 5px;'>Government of Tamil Nadu</p>
+            <p style='font-size: 20px; margin-top: 20px;'>
+                <span style='color: #E74C3C; font-weight: bold;'>Course Name:</span> 
+                <span style='color: #000000; font-weight: bold;'>Data Analytics & Visualization</span>
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+
+with head_right:
+    st.image("HL_Logo.png", use_container_width=True)
+
+st.markdown("<hr style='border: 1.5px solid #1A3C6D; margin-top: 0;'>", unsafe_allow_html=True)
+
+# --- NAVIGATION BUTTONS (Assessment Right-Aligned) ---
+nav_col1, nav_spacer, nav_col2 = st.columns([1, 4, 1])
+with nav_col1:
+    if st.button("🏠 Home", use_container_width=True):
+        st.session_state.page = "Home"
+with nav_col2:
+    if st.button("📋 Assessment", use_container_width=True):
+        st.session_state.page = "Assessment"
 
 st.markdown("<br>", unsafe_allow_html=True)
-k1, k2, k3, k4 = st.columns(4)
+
+# --- STATS CARDS (Global Summary - 5 Columns) ---
+k1, k2, k3, k4, k5 = st.columns(5)
 with k1: modern_card("Total Enrolled", int(summary_df.iloc[0]['Enrolled Count']))
 with k2: modern_card("Total Completed", int(summary_df.iloc[0]['Completed Count']), "border-green")
 with k3: modern_card("In Progress", int(summary_df.iloc[0]['In Progress']))
 with k4: modern_card("Not Started", int(summary_df.iloc[0]['Not Started']), "border-red")
+with k5: modern_card("Course Duration", "45 Hrs", "border-blue")
+
+# --- HORIZONTAL FILTER SECTION ---
+st.markdown("### 🛠️ Quick Filters")
+f1, f2, f3, f4 = st.columns(4)
+
+with f1:
+    u_code = st.multiselect("University Code", options=sorted(df["University Code"].unique()))
+
+temp_df = df.copy()
+if u_code: 
+    temp_df = temp_df[temp_df["University Code"].isin(u_code)]
+
+with f2:
+    c_name = st.multiselect("College Name", options=sorted(temp_df["College Name"].unique()))
+
+with f3:
+    t_name = st.multiselect("Trainer name", options=sorted(df["Trainer name"].unique()))
+
+with f4:
+    b_size = st.multiselect("Batch Size", options=sorted(df["Batch Size"].unique()))
+
+# Center-Aligned Reset Button
+res_c1, res_c2, res_c3 = st.columns([2, 1, 2])
+with res_c2:
+    if st.button("🔄 Reset Filters", use_container_width=True): 
+        st.rerun()
+
+# Applying Filters
+filt_df = df.copy()
+if u_code: filt_df = filt_df[filt_df["University Code"].isin(u_code)]
+if c_name: filt_df = filt_df[filt_df["College Name"].isin(c_name)]
+if t_name: filt_df = filt_df[filt_df["Trainer name"].isin(t_name)]
+if b_size: filt_df = filt_df[filt_df["Batch Size"].isin(b_size)]
 
 st.markdown("---")
 
 # 5. METRICS FUNCTIONS
 def display_filtered_metrics():
-    st.markdown("### 🔍 Filtered Selection Summary")
     if filt_df.empty:
         st.warning("No data found for the selected filters.")
         return
@@ -152,37 +173,51 @@ def display_filtered_metrics():
     m4, m5, m6 = st.columns(3)
     with m4: modern_card("Intervention Completed", f"{filt_df['Intervention Completed'].sum():,}", "border-green")
     with m5: modern_card("Pending Intervention", f"{filt_df['Pending Intervention '].sum():,}", "border-red")
-    with m6: modern_card("Completion %", f"{round(filt_df['Original_Val'].mean() * 100)}%")
+    with m6: modern_card("Completion %", f"{round(filt_df['Original_Val'].mean() * 100) if not filt_df['Original_Val'].isna().all() else 0}%")
 
 def display_filtered_table():
     st.markdown("### 📋 Detailed Records")
-    # Note: Columns here match the exact Excel header names
-    display_cols = ['University Code', 'College Name', 'Trainer name', 'Students Count', 
+    display_cols = ['University Code', 'College Name', 'Trainer name', 'Batch Size', 'Students Count', 
                     'Intervention Completed', 'Pending Intervention ', 
                     'Batch Wise Weekly Hours Completed', 'Pending Hours Per Batch', 'Completion %']
     valid_cols = [c for c in display_cols if c in filt_df.columns]
+    
     st.dataframe(filt_df[valid_cols].style.format({
-        'Completion %': '{:d}%', 'Batch Wise Weekly Hours Completed': '{:.1f}', 'Pending Hours Per Batch': '{:.1f}'
+        'Completion %': '{:d}%', 
+        'Batch Wise Weekly Hours Completed': '{:.1f}', 
+        'Pending Hours Per Batch': '{:.1f}',
+        'Batch Size': '{:.2f}'
     }), use_container_width=True, hide_index=True)
+
+# Selection Metrics (Dynamic)
+display_filtered_metrics()
 
 # 6. PAGE CONDITIONAL CONTENT
 if st.session_state.page == "Home":
-    display_filtered_metrics()
-    display_filtered_table()
     st.markdown("### 📈 Performance Visuals")
     c1, c2 = st.columns([2, 1])
     with c1:
         chart_data = filt_df.groupby("College Name")["Batch Wise Weekly Hours Completed"].sum().sort_values().tail(10)
-        fig = px.bar(x=chart_data.values, y=chart_data.index, orientation='h', color_discrete_sequence=['#1A3C6D'], title="Top 10 Colleges by Hours")
+        fig = px.bar(x=chart_data.values, y=chart_data.index, orientation='h', 
+                     color_discrete_sequence=['#1A3C6D'], title="Top 10 Colleges by Hours")
         st.plotly_chart(fig, use_container_width=True)
     with c2:
-        # Note the space in 'Pending Intervention '
         comp = filt_df['Intervention Completed'].sum()
         pend = filt_df['Pending Intervention '].sum()
-        fig_pie = px.pie(values=[comp, pend], names=['Done', 'Pending'], 
-                         color_discrete_sequence=['#28A745', '#E74C3C'], title="Overall Status")
+        
+        fig_pie = px.pie(
+            values=[comp, pend], 
+            names=['Done', 'Pending'], 
+            title="Overall Status",
+            color=['Done', 'Pending'],
+            color_discrete_map={'Done': '#28A745', 'Pending': '#E74C3C'}
+        )
         st.plotly_chart(fig_pie, use_container_width=True)
-else:
-    display_filtered_metrics()
+
+elif st.session_state.page == "Assessment":
     display_filtered_table()
-    st.download_button("📥 Download Filtered Data", data=filt_df.to_csv(index=False).encode('utf-8'), file_name="Filtered_Tracker.csv")
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.download_button("📥 Download Filtered Data", 
+                       data=filt_df.to_csv(index=False).encode('utf-8'), 
+                       file_name="Filtered_Tracker.csv", 
+                       use_container_width=True)
