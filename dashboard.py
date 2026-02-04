@@ -12,6 +12,8 @@ st.set_page_config(page_title="Naan Mudhalvan Dashboard", layout="wide")
 st.markdown("""
     <style>
     .main { background-color: #F8F9FA; }
+    
+    /* KPI Card Styling */
     .card-container {
         background-color: white; padding: 20px; border-radius: 12px;
         box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05); text-align: center;
@@ -23,7 +25,36 @@ st.markdown("""
     .border-red { border-bottom: 5px solid #E74C3C; }
     .card-title { font-size: 13px; color: #666; text-transform: uppercase; margin-bottom: 8px; font-weight: 600; }
     .card-value { font-size: 24px; font-weight: bold; color: #1A3C6D; }
-    div.stButton > button { background-color: #1A3C6D; color: white; border-radius: 5px; height: 3em; }
+
+    /* Active Trainer Banner */
+    .active-trainer-box {
+        font-size: 20px; font-weight: bold; 
+        text-align: center; padding: 15px; border-radius: 8px;
+        background-color: #FFFFFF; border: 1px solid #DDDDDD;
+        margin-bottom: 25px; box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        line-height: 1.6;
+    }
+
+    /* --- GLOBAL BUTTON STYLING --- */
+    div.stButton > button {
+        background-color: #1A3C6D;
+        color: white;
+        border-radius: 8px;
+        height: 3.5em;
+        width: 100%;
+        font-weight: 500;
+        border: none;
+        transition: background-color 0.3s ease, color 0.3s ease, font-weight 0.1s ease;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    div.stButton > button:hover {
+        background-color: #F39C12 !important;
+        color: #000000 !important;
+        font-weight: 800 !important;
+        box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
+        border: 1.5px solid #000000;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -77,16 +108,20 @@ except Exception as e:
     st.error(f"Error loading data: {e}")
     st.stop()
 
-# 3. PAGE STATE
+# 3. PAGE STATE & RESET LOGIC
 if 'page' not in st.session_state: 
     st.session_state.page = "Home"
 
+if 'reset_counter' not in st.session_state:
+    st.session_state.reset_counter = 0
+
+def reset_filters():
+    st.session_state.reset_counter += 1
+    # st.rerun() is optional here as the state change triggers a refresh
+
 # 4. MAIN INTERFACE HEADER
 head_left, head_center, head_right = st.columns([1, 4, 1])
-
-with head_left:
-    st.image("NM_Logo.png", use_container_width=True)
-
+with head_left: st.image("NM_Logo.png", use_container_width=True)
 with head_center:
     st.markdown("""
         <div style='text-align: center;'>
@@ -99,24 +134,20 @@ with head_center:
             </p>
         </div>
         """, unsafe_allow_html=True)
-
-with head_right:
-    st.image("HL_Logo.png", use_container_width=True)
+with head_right: st.image("HL_Logo.png", use_container_width=True)
 
 st.markdown("<hr style='border: 1.5px solid #1A3C6D; margin-top: 0;'>", unsafe_allow_html=True)
 
 # --- NAVIGATION ---
 nav_col1, nav_spacer, nav_col2 = st.columns([1, 4, 1])
 with nav_col1:
-    if st.button("🏠 Home", use_container_width=True):
-        st.session_state.page = "Home"
+    if st.button("🏠 Home", use_container_width=True): st.session_state.page = "Home"
 with nav_col2:
-    if st.button("📋 Assessment", use_container_width=True):
-        st.session_state.page = "Assessment"
+    if st.button("📋 Assessment", use_container_width=True): st.session_state.page = "Assessment"
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# --- GLOBAL KPI CARDS (Always Visible at Top) ---
+# --- GLOBAL KPI CARDS ---
 k1, k2, k3, k4, k5 = st.columns(5)
 with k1: modern_card("Total Enrolled", int(summary_df.iloc[0]['Enrolled Count']))
 with k2: modern_card("Total Completed", int(summary_df.iloc[0]['Completed Count']), "border-green")
@@ -128,113 +159,110 @@ with k5: modern_card("Course Duration", "45 Hrs", "border-blue")
 st.markdown("### 🛠️ Quick Filters")
 f1, f2, f3, f4 = st.columns(4)
 
-# 1. University Filter (Base)
-with f1:
-    u_code = st.multiselect("University Code", options=sorted(df["University Code"].unique()))
+# Use Dynamic Keys based on reset_counter
+with f1: 
+    u_code = st.multiselect("University Code", 
+                            options=sorted(df["University Code"].unique()),
+                            key=f"univ_{st.session_state.reset_counter}")
 
-# 2. College Filter (Depends on University)
 temp_df = df.copy()
-if u_code:
-    temp_df = temp_df[temp_df["University Code"].isin(u_code)]
-with f2:
-    c_name = st.multiselect("College Name", options=sorted(temp_df["College Name"].unique()))
+if u_code: temp_df = temp_df[temp_df["University Code"].isin(u_code)]
 
-# 3. Trainer Filter (Depends on Univ + College)
-if c_name:
-    temp_df = temp_df[temp_df["College Name"].isin(c_name)]
-with f3:
-    t_name = st.multiselect("Trainer name", options=sorted(temp_df["Trainer name"].unique()))
+with f2: 
+    c_name = st.multiselect("College Name", 
+                            options=sorted(temp_df["College Name"].unique()),
+                            key=f"coll_{st.session_state.reset_counter}")
 
-# 4. Batch Size Filter (Depends on Univ + College + Trainer)
-if t_name:
-    temp_df = temp_df[temp_df["Trainer name"].isin(t_name)]
-with f4:
-    b_size = st.multiselect("Batch Size", options=sorted(temp_df["Batch Size"].unique()))
+if c_name: temp_df = temp_df[temp_df["College Name"].isin(c_name)]
 
-# Final Filtered DataFrame
+with f3: 
+    t_name = st.multiselect("Trainer name", 
+                            options=sorted(temp_df["Trainer name"].unique()),
+                            key=f"train_{st.session_state.reset_counter}")
+
+if t_name: temp_df = temp_df[temp_df["Trainer name"].isin(t_name)]
+
+with f4: 
+    b_size = st.multiselect("Batch Size", 
+                            options=sorted(temp_df["Batch Size"].unique()),
+                            key=f"batch_{st.session_state.reset_counter}")
+
 filt_df = temp_df.copy()
-if b_size:
-    filt_df = filt_df[filt_df["Batch Size"].isin(b_size)]
+if b_size: filt_df = filt_df[filt_df["Batch Size"].isin(b_size)]
 
-# Reset Logic
+# Global Reset Button calling the reset function
 st.markdown("<br>", unsafe_allow_html=True)
 res_c1, res_c2, res_c3 = st.columns([2, 1, 2])
 with res_c2:
-    if st.button("🔄 Reset Filters", use_container_width=True): 
-        st.rerun()
-
-# Logic for the Dynamic Trainer Card
-active_trainers = filt_df['Trainer name'].unique()
-if len(t_name) == 1:
-    trainer_display = t_name[0]
-elif len(t_name) > 1:
-    trainer_display = "Multiple Trainers"
-elif len(active_trainers) == 1:
-    trainer_display = active_trainers[0]
-else:
-    trainer_display = "All Trainers"
-
-# Centered Trainer Card (Always visible to show context)
-card_c1, card_c2, card_c3 = st.columns([1, 2, 1])
-with card_c2:
-    modern_card("Selected Trainer", trainer_display, "border-blue")
+    if st.button("🔄 Reset Filters", use_container_width=True, on_click=reset_filters):
+        pass # The logic is handled in the callback
 
 st.markdown("---")
 
-# 5. CONTENT FUNCTIONS
-def display_filtered_metrics():
+# 5. PAGE CONDITIONAL CONTENT
+if st.session_state.page == "Home":
+    # --- DYNAMIC MULTI-COLOR TRAINER TEXT LOGIC ---
+    trainer_uni_map = filt_df.groupby('Trainer name')['University Code'].unique()
+    active_trainer_list = sorted(trainer_uni_map.index.tolist())
+    total_trainers_count = len(df['Trainer name'].unique())
+    
+    label_html = "<span style='color: #E74C3C;'>Active Trainer: </span>"
+    
+    if len(active_trainer_list) == total_trainers_count:
+        content_html = "<span style='color: #000000;'>All Trainers</span>"
+    elif len(active_trainer_list) == 0:
+        content_html = "<span style='color: #000000;'>No Data Selected</span>"
+    else:
+        formatted_list = []
+        for trainer in active_trainer_list:
+            codes = ", ".join(trainer_uni_map[trainer])
+            trainer_part = f"<span style='color: #000000;'>{trainer}</span>"
+            uni_part = f" <span style='color: #F39C12;'>({codes})</span>"
+            formatted_list.append(trainer_part + uni_part)
+        content_html = ", ".join(formatted_list)
+
+    st.markdown(f"<div class='active-trainer-box'>{label_html} {content_html}</div>", unsafe_allow_html=True)
+
     if filt_df.empty:
         st.warning("No data found for the selected filters.")
-        return
-    
-    m1, m2, m3 = st.columns(3)
-    with m1: modern_card("Student Count", f"{filt_df['Students Count'].sum():,}")
-    with m2: modern_card("Weekly Hours Done", f"{filt_df['Batch Wise Weekly Hours Completed'].sum():.1f} Hrs")
-    with m3: modern_card("Pending Hours", f"{filt_df['Pending Hours Per Batch'].sum():.1f} Hrs", "border-red")
+    else:
+        m1, m2, m3 = st.columns(3)
+        with m1: modern_card("Student Count", f"{filt_df['Students Count'].sum():,}")
+        with m2: modern_card("Weekly Hours Done", f"{filt_df['Batch Wise Weekly Hours Completed'].sum():.1f} Hrs")
+        with m3: modern_card("Pending Hours", f"{filt_df['Pending Hours Per Batch'].sum():.1f} Hrs", "border-red")
 
-    m4, m5, m6 = st.columns(3)
-    with m4: modern_card("Intervention Completed", f"{filt_df['Intervention Completed'].sum():,}", "border-green")
-    with m5: modern_card("Pending Intervention", f"{filt_df['Pending Intervention '].sum():,}", "border-red")
-    with m6: modern_card("Completion %", f"{round(filt_df['Original_Val'].mean() * 100) if not filt_df['Original_Val'].isna().all() else 0}%")
+        m4, m5, m6 = st.columns(3)
+        with m4: modern_card("Intervention Completed", f"{filt_df['Intervention Completed'].sum():,}", "border-green")
+        with m5: modern_card("Pending Intervention", f"{filt_df['Pending Intervention '].sum():,}", "border-red")
+        with m6: modern_card("Completion %", f"{round(filt_df['Original_Val'].mean() * 100) if not filt_df['Original_Val'].isna().all() else 0}%")
 
-def display_filtered_table():
-    st.markdown("### 📋 Assessment & Detailed Records")
-    display_cols = ['University Code', 'College Name', 'Trainer name', 'Batch Size', 'Students Count', 
-                    'Intervention Completed', 'Pending Intervention ', 
-                    'Batch Wise Weekly Hours Completed', 'Pending Hours Per Batch', 'Completion %']
-    valid_cols = [c for c in display_cols if c in filt_df.columns]
-    
-    st.dataframe(filt_df[valid_cols].style.format({
-        'Completion %': '{:d}%', 
-        'Batch Wise Weekly Hours Completed': '{:.1f}', 
-        'Pending Hours Per Batch': '{:.1f}',
-        'Batch Size': '{:.2f}'
-    }), use_container_width=True, hide_index=True)
-
-# 6. PAGE CONDITIONAL CONTENT
-if st.session_state.page == "Home":
-    # Dedicated Home Content
-    display_filtered_metrics()
-    st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown("### 📈 Performance Visuals")
-    c1, c2 = st.columns([2, 1])
-    with c1:
-        chart_data = filt_df.groupby("College Name")["Batch Wise Weekly Hours Completed"].sum().sort_values().tail(10)
-        fig = px.bar(x=chart_data.values, y=chart_data.index, orientation='h', 
-                     color_discrete_sequence=['#1A3C6D'], title="Top 10 Colleges by Hours")
-        st.plotly_chart(fig, use_container_width=True)
-    with c2:
-        comp = filt_df['Intervention Completed'].sum()
-        pend = filt_df['Pending Intervention '].sum()
-        fig_pie = px.pie(values=[comp, pend], names=['Done', 'Pending'], title="Overall Status",
-                         color=['Done', 'Pending'], color_discrete_map={'Done': '#28A745', 'Pending': '#E74C3C'})
-        st.plotly_chart(fig_pie, use_container_width=True)
+        st.markdown("<br>### 📈 Performance Visuals")
+        c1, c2 = st.columns([2, 1])
+        with c1:
+            chart_data = filt_df.groupby("College Name")["Batch Wise Weekly Hours Completed"].sum().sort_values().tail(10)
+            fig = px.bar(x=chart_data.values, y=chart_data.index, orientation='h', 
+                         color_discrete_sequence=['#1A3C6D'], title="Top 10 Colleges by Hours")
+            st.plotly_chart(fig, use_container_width=True)
+        with c2:
+            comp, pend = filt_df['Intervention Completed'].sum(), filt_df['Pending Intervention '].sum()
+            fig_pie = px.pie(values=[comp, pend], names=['Done', 'Pending'], title="Overall Status",
+                             color=['Done', 'Pending'], color_discrete_map={'Done': '#28A745', 'Pending': '#E74C3C'})
+            st.plotly_chart(fig_pie, use_container_width=True)
 
 elif st.session_state.page == "Assessment":
-    # Dedicated Assessment Page
-    display_filtered_table()
-    st.markdown("<br>", unsafe_allow_html=True)
-    st.download_button("📥 Download Filtered Assessment Data", 
-                       data=filt_df.to_csv(index=False).encode('utf-8'), 
-                       file_name="Assessment_Tracker.csv", 
-                       use_container_width=True)
+    st.markdown("### 📋 Assessment & Detailed Records")
+    if filt_df.empty:
+        st.warning("No data found for the selected filters.")
+    else:
+        display_cols = ['University Code', 'College Name', 'Trainer name', 'Batch Size', 'Students Count', 
+                        'Intervention Completed', 'Pending Intervention ', 
+                        'Batch Wise Weekly Hours Completed', 'Pending Hours Per Batch', 'Completion %']
+        st.dataframe(filt_df[display_cols].style.format({
+            'Completion %': '{:d}%', 'Batch Wise Weekly Hours Completed': '{:.1f}', 
+            'Pending Hours Per Batch': '{:.1f}', 'Batch Size': '{:.2f}'
+        }), use_container_width=True, hide_index=True)
+        
+        st.markdown("<br>")
+        st.download_button("📥 Download Filtered Assessment Data", 
+                           data=filt_df.to_csv(index=False).encode('utf-8'), 
+                           file_name="Assessment_Tracker.csv", use_container_width=True)
