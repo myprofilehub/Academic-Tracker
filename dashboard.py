@@ -22,7 +22,7 @@ st.markdown("""
     .border-green { border-bottom: 5px solid #28A745; }
     .border-red { border-bottom: 5px solid #E74C3C; }
     .card-title { font-size: 13px; color: #666; text-transform: uppercase; margin-bottom: 8px; font-weight: 600; }
-    .card-value { font-size: 28px; font-weight: bold; color: #1A3C6D; }
+    .card-value { font-size: 24px; font-weight: bold; color: #1A3C6D; }
     div.stButton > button { background-color: #1A3C6D; color: white; border-radius: 5px; height: 3em; }
     </style>
     """, unsafe_allow_html=True)
@@ -105,7 +105,7 @@ with head_right:
 
 st.markdown("<hr style='border: 1.5px solid #1A3C6D; margin-top: 0;'>", unsafe_allow_html=True)
 
-# --- NAVIGATION BUTTONS (Assessment Right-Aligned) ---
+# --- NAVIGATION ---
 nav_col1, nav_spacer, nav_col2 = st.columns([1, 4, 1])
 with nav_col1:
     if st.button("🏠 Home", use_container_width=True):
@@ -116,7 +116,7 @@ with nav_col2:
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# --- STATS CARDS (Global Summary - 5 Columns) ---
+# --- GLOBAL KPI CARDS (Always Visible at Top) ---
 k1, k2, k3, k4, k5 = st.columns(5)
 with k1: modern_card("Total Enrolled", int(summary_df.iloc[0]['Enrolled Count']))
 with k2: modern_card("Total Completed", int(summary_df.iloc[0]['Completed Count']), "border-green")
@@ -124,47 +124,69 @@ with k3: modern_card("In Progress", int(summary_df.iloc[0]['In Progress']))
 with k4: modern_card("Not Started", int(summary_df.iloc[0]['Not Started']), "border-red")
 with k5: modern_card("Course Duration", "45 Hrs", "border-blue")
 
-# --- HORIZONTAL FILTER SECTION ---
+# --- CASCADING FILTERS SECTION ---
 st.markdown("### 🛠️ Quick Filters")
 f1, f2, f3, f4 = st.columns(4)
 
+# 1. University Filter (Base)
 with f1:
     u_code = st.multiselect("University Code", options=sorted(df["University Code"].unique()))
 
+# 2. College Filter (Depends on University)
 temp_df = df.copy()
-if u_code: 
+if u_code:
     temp_df = temp_df[temp_df["University Code"].isin(u_code)]
-
 with f2:
     c_name = st.multiselect("College Name", options=sorted(temp_df["College Name"].unique()))
 
+# 3. Trainer Filter (Depends on Univ + College)
+if c_name:
+    temp_df = temp_df[temp_df["College Name"].isin(c_name)]
 with f3:
-    t_name = st.multiselect("Trainer name", options=sorted(df["Trainer name"].unique()))
+    t_name = st.multiselect("Trainer name", options=sorted(temp_df["Trainer name"].unique()))
 
+# 4. Batch Size Filter (Depends on Univ + College + Trainer)
+if t_name:
+    temp_df = temp_df[temp_df["Trainer name"].isin(t_name)]
 with f4:
-    b_size = st.multiselect("Batch Size", options=sorted(df["Batch Size"].unique()))
+    b_size = st.multiselect("Batch Size", options=sorted(temp_df["Batch Size"].unique()))
 
-# Center-Aligned Reset Button
+# Final Filtered DataFrame
+filt_df = temp_df.copy()
+if b_size:
+    filt_df = filt_df[filt_df["Batch Size"].isin(b_size)]
+
+# Reset Logic
+st.markdown("<br>", unsafe_allow_html=True)
 res_c1, res_c2, res_c3 = st.columns([2, 1, 2])
 with res_c2:
     if st.button("🔄 Reset Filters", use_container_width=True): 
         st.rerun()
 
-# Applying Filters
-filt_df = df.copy()
-if u_code: filt_df = filt_df[filt_df["University Code"].isin(u_code)]
-if c_name: filt_df = filt_df[filt_df["College Name"].isin(c_name)]
-if t_name: filt_df = filt_df[filt_df["Trainer name"].isin(t_name)]
-if b_size: filt_df = filt_df[filt_df["Batch Size"].isin(b_size)]
+# Logic for the Dynamic Trainer Card
+active_trainers = filt_df['Trainer name'].unique()
+if len(t_name) == 1:
+    trainer_display = t_name[0]
+elif len(t_name) > 1:
+    trainer_display = "Multiple Trainers"
+elif len(active_trainers) == 1:
+    trainer_display = active_trainers[0]
+else:
+    trainer_display = "All Trainers"
+
+# Centered Trainer Card (Always visible to show context)
+card_c1, card_c2, card_c3 = st.columns([1, 2, 1])
+with card_c2:
+    modern_card("Selected Trainer", trainer_display, "border-blue")
 
 st.markdown("---")
 
-# 5. METRICS FUNCTIONS
+# 5. CONTENT FUNCTIONS
 def display_filtered_metrics():
     if filt_df.empty:
         st.warning("No data found for the selected filters.")
         return
-
+    
     m1, m2, m3 = st.columns(3)
     with m1: modern_card("Student Count", f"{filt_df['Students Count'].sum():,}")
     with m2: modern_card("Weekly Hours Done", f"{filt_df['Batch Wise Weekly Hours Completed'].sum():.1f} Hrs")
@@ -176,7 +198,7 @@ def display_filtered_metrics():
     with m6: modern_card("Completion %", f"{round(filt_df['Original_Val'].mean() * 100) if not filt_df['Original_Val'].isna().all() else 0}%")
 
 def display_filtered_table():
-    st.markdown("### 📋 Detailed Records")
+    st.markdown("### 📋 Assessment & Detailed Records")
     display_cols = ['University Code', 'College Name', 'Trainer name', 'Batch Size', 'Students Count', 
                     'Intervention Completed', 'Pending Intervention ', 
                     'Batch Wise Weekly Hours Completed', 'Pending Hours Per Batch', 'Completion %']
@@ -189,11 +211,11 @@ def display_filtered_table():
         'Batch Size': '{:.2f}'
     }), use_container_width=True, hide_index=True)
 
-# Selection Metrics (Dynamic)
-display_filtered_metrics()
-
 # 6. PAGE CONDITIONAL CONTENT
 if st.session_state.page == "Home":
+    # Dedicated Home Content
+    display_filtered_metrics()
+    st.markdown("<br>", unsafe_allow_html=True)
     st.markdown("### 📈 Performance Visuals")
     c1, c2 = st.columns([2, 1])
     with c1:
@@ -204,20 +226,15 @@ if st.session_state.page == "Home":
     with c2:
         comp = filt_df['Intervention Completed'].sum()
         pend = filt_df['Pending Intervention '].sum()
-        
-        fig_pie = px.pie(
-            values=[comp, pend], 
-            names=['Done', 'Pending'], 
-            title="Overall Status",
-            color=['Done', 'Pending'],
-            color_discrete_map={'Done': '#28A745', 'Pending': '#E74C3C'}
-        )
+        fig_pie = px.pie(values=[comp, pend], names=['Done', 'Pending'], title="Overall Status",
+                         color=['Done', 'Pending'], color_discrete_map={'Done': '#28A745', 'Pending': '#E74C3C'})
         st.plotly_chart(fig_pie, use_container_width=True)
 
 elif st.session_state.page == "Assessment":
+    # Dedicated Assessment Page
     display_filtered_table()
     st.markdown("<br>", unsafe_allow_html=True)
-    st.download_button("📥 Download Filtered Data", 
+    st.download_button("📥 Download Filtered Assessment Data", 
                        data=filt_df.to_csv(index=False).encode('utf-8'), 
-                       file_name="Filtered_Tracker.csv", 
+                       file_name="Assessment_Tracker.csv", 
                        use_container_width=True)
