@@ -75,7 +75,7 @@ def load_and_clean_data():
     tracker = pd.read_excel(excel_file, sheet_name='Intervention Tracker', skiprows=4)
     summary = pd.read_excel(excel_file, sheet_name='Summary')
 
-    structural_cols = ['University Code', 'College Name', 'Trainer name', 'Batch Size', 'Start Date', 'End Date', 'Timing']
+    structural_cols = ['University Code', 'College Name', 'Trainer name', 'Batch No', 'Start Date', 'End Date', 'Timing']
     existing_struct = [c for c in structural_cols if c in tracker.columns]
     tracker[existing_struct] = tracker[existing_struct].ffill()
 
@@ -83,13 +83,13 @@ def load_and_clean_data():
     
     cols_to_fix = [
         'Students Count', 'Intervention Completed', 'Pending Intervention ',
-        'Batch Wise Weekly Hours Completed', 'Pending Hours Per Batch', 'Batch Size'
+        'Batch Wise Weekly Hours Completed', 'Pending Hours Per Batch', 'Batch No'
     ]
     
     for col in cols_to_fix:
         if col in tracker.columns:
             tracker[col] = pd.to_numeric(tracker[col], errors='coerce').fillna(0)
-            if 'Hours' not in col and 'Percentage' not in col and 'Batch Size' not in col:
+            if 'Hours' not in col and 'Percentage' not in col and 'Batch No' not in col:
                 tracker[col] = tracker[col].astype(int)
 
     for col in ['University Code', 'College Name', 'Trainer name']:
@@ -183,12 +183,12 @@ with f3:
 if t_name: temp_df = temp_df[temp_df["Trainer name"].isin(t_name)]
 
 with f4: 
-    b_size = st.multiselect("Batch Size", 
-                            options=sorted(temp_df["Batch Size"].unique()),
+    b_size = st.multiselect("Batch No", 
+                            options=sorted(temp_df["Batch No"].unique()),
                             key=f"batch_{st.session_state.reset_counter}")
 
 filt_df = temp_df.copy()
-if b_size: filt_df = filt_df[filt_df["Batch Size"].isin(b_size)]
+if b_size: filt_df = filt_df[filt_df["Batch No"].isin(b_size)]
 
 # Global Reset Button calling the reset function
 st.markdown("<br>", unsafe_allow_html=True)
@@ -236,7 +236,7 @@ if st.session_state.page == "Home":
         with m5: modern_card("Pending Intervention", f"{filt_df['Pending Intervention '].sum():,}", "border-red")
         with m6: modern_card("Completion %", f"{round(filt_df['Original_Val'].mean() * 100) if not filt_df['Original_Val'].isna().all() else 0}%")
 
-        st.markdown("<br>### 📈 Performance Visuals")
+        #st.markdown("<br>### 📈 Performance Visuals")
         c1, c2 = st.columns([2, 1])
         with c1:
             chart_data = filt_df.groupby("College Name")["Batch Wise Weekly Hours Completed"].sum().sort_values().tail(10)
@@ -254,12 +254,12 @@ elif st.session_state.page == "Assessment":
     if filt_df.empty:
         st.warning("No data found for the selected filters.")
     else:
-        display_cols = ['University Code', 'College Name', 'Trainer name', 'Batch Size', 'Students Count', 
+        display_cols = ['University Code', 'College Name', 'Trainer name', 'Batch No', 'Students Count', 
                         'Intervention Completed', 'Pending Intervention ', 
                         'Batch Wise Weekly Hours Completed', 'Pending Hours Per Batch', 'Completion %']
         st.dataframe(filt_df[display_cols].style.format({
             'Completion %': '{:d}%', 'Batch Wise Weekly Hours Completed': '{:.1f}', 
-            'Pending Hours Per Batch': '{:.1f}', 'Batch Size': '{:.2f}'
+            'Pending Hours Per Batch': '{:.1f}', 'Batch No': '{:.2f}'
         }), use_container_width=True, hide_index=True)
         
         st.markdown("<br>")
