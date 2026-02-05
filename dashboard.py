@@ -63,7 +63,7 @@ def modern_card(label, value, border_style="border-blue"):
     return st.markdown(card_html, unsafe_allow_html=True)
 
 # 2. DATA ENGINE
-XLSX_LINK = "https://sheet.zohopublic.in/sheet/published/ddt54238ae124de51497ea894fa1aec84ee18?download=xlsx"
+XLSX_LINK = "https://sheet.zohopublic.in/sheet/published/ydgt683ffbc94742d42859985572cd73c80c7?download=xlsx"
 
 @st.cache_data(ttl=1)
 def load_and_clean_data():
