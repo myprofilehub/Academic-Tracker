@@ -55,6 +55,22 @@ st.markdown("""
         box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
         border: 1.5px solid #000000;
     }
+    /* --- DOWNLOAD BUTTON STYLING (GREEN) --- */
+    div.stDownloadButton > button {
+        background-color: #28A745;  /* Green */
+        color: white;
+        border-radius: 8px;
+        height: 3.5em;
+        font-weight: 600;
+        border: none;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    div.stDownloadButton > button:hover {
+        background-color: #28A745;  /* Dark green */
+        color: white !important;    /* Black text */
+        font-weight: 800 !important; /* Bold text */
+        box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -143,7 +159,7 @@ nav_col1, nav_spacer, nav_col2 = st.columns([1, 4, 1])
 with nav_col1:
     if st.button("🏠 Home", use_container_width=True): st.session_state.page = "Home"
 with nav_col2:
-    if st.button("📋 Assessment", use_container_width=True): st.session_state.page = "Assessment"
+    if st.button("📑 Academic Report", width='stretch'): st.session_state.page = "Academic Report"
 
 st.markdown("<br>", unsafe_allow_html=True)
 
@@ -236,21 +252,183 @@ if st.session_state.page == "Home":
         with m5: modern_card("Pending Intervention", f"{filt_df['Pending Intervention '].sum():,}", "border-red")
         with m6: modern_card("Completion %", f"{round(filt_df['Original_Val'].mean() * 100) if not filt_df['Original_Val'].isna().all() else 0}%")
 
+    # ===============================
+    # 📈 WEEK-WISE INTERVENTION COUNT TREND (FILTER AWARE)
+    # ===============================
+
+    st.markdown("### 📊 College-wise Weekly Intervention Trend")
+
+    # Identify weekday columns (week-wise structure)
+    week_cols = [col for col in filt_df.columns 
+                if any(day in col for day in ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'])]
+
+    if len(week_cols) == 0:
+        st.warning("No weekday columns found for weekly trend calculation.")
+    else:
+        # Convert wide → long
+        long_df = filt_df.melt(
+            id_vars=['College Name', 'Batch No'],   # ✅ added Batch No
+            value_vars=week_cols,
+            var_name='Day',
+            value_name='Value'
+        )
+
+        # Convert to numeric
+        long_df['Value'] = pd.to_numeric(long_df['Value'], errors='coerce').fillna(0)
+
+        # Extract week number (Monday.1 → Week 2 etc.)
+        long_df['Week'] = long_df['Day'].str.extract(r'\.(\d+)')
+        long_df['Week'] = long_df['Week'].fillna('0')
+        long_df['Week'] = long_df['Week'].astype(int) + 1
+
+        # Create display label: Week 1, Week 2, ...
+        long_df['Week_Label'] = "Week " + long_df['Week'].astype(str)
+
+        # COUNT interventions (value > 0 = one intervention)
+        weekly_interventions = (
+            long_df[long_df['Value'] > 0]
+            .groupby(['College Name', 'Batch No', 'Week', 'Week_Label'])  # ✅ added Batch No
+            .size()
+            .reset_index(name='Intervention Count')
+        )
+
+        if weekly_interventions.empty:
+            st.warning("No intervention data available for selected filters.")
+        else:
+            # 🔽 Horizontal filters (College | Batch)
+            col_f1, col_f2 = st.columns(2)
+
+            with col_f1:
+                college_list = sorted(weekly_interventions['College Name'].unique())
+                selected_college = st.selectbox(
+                "Select College",
+                college_list,
+                key="weekly_trend_college"
+                )
+
+            with col_f2:
+                batch_list = sorted(
+                weekly_interventions[
+                weekly_interventions['College Name'] == selected_college
+                ]['Batch No'].unique()
+                )
+
+                selected_batch = st.selectbox(
+                "Select Batch No",
+                batch_list,
+                key="weekly_trend_batch"
+                )
+            trend_df = weekly_interventions[
+                (weekly_interventions['College Name'] == selected_college) &
+                (weekly_interventions['Batch No'] == selected_batch)
+            ].sort_values("Week")
+
+            # Plot trend with Week labels
+            fig = px.line(
+                trend_df,
+                x='Week_Label',
+                y='Intervention Count',
+                markers=True,
+                title=f"📈 {selected_college} (Batch {int(selected_batch)})",
+            )
+
+            fig.update_traces(
+                line=dict(width=1.5, color="black"),
+                marker=dict(size=9, color="#FF8C00"),
+                hovertemplate="<b>%{x}</b><br>Interventions: %{y}<extra></extra>"
+            )
+
+            fig.update_layout(
+                title_x=0.3,
+                font=dict(size=14),
+                plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)",
+                xaxis_title="Week",
+                yaxis_title="Intervention Count",
+                xaxis=dict(showgrid=False),
+                yaxis=dict(showgrid=False, rangemode="tozero"),
+                margin=dict(l=40, r=40, t=60, b=40),
+            )
+
+            # Force Y-axis to show only integers
+            fig.update_yaxes(dtick=1)
+
+            st.plotly_chart(fig, use_container_width=True)
+
+
         #st.markdown("<br>### 📈 Performance Visuals")
         c1, c2 = st.columns([2, 1])
         with c1:
-            chart_data = filt_df.groupby("College Name")["Batch Wise Weekly Hours Completed"].sum().sort_values().tail(10)
-            fig = px.bar(x=chart_data.values, y=chart_data.index, orientation='h', 
-                         color_discrete_sequence=['#1A3C6D'], title="Top 10 Colleges by Hours")
+            st.markdown("#### 📈 Overall Intervention Status")
+
+            # Aggregate completed and pending per college
+            college_status = (
+                filt_df.groupby("College Name")[["Intervention Completed", "Pending Intervention "]]
+                .sum()
+                .reset_index()
+            )
+
+            # Take top 10 colleges by total interventions
+            college_status["Total"] = (
+                college_status["Intervention Completed"] + college_status["Pending Intervention "]
+            )
+            college_status = college_status.sort_values("Total", ascending=False).head(10)
+
+            fig = px.bar(
+                college_status,
+                y="College Name",
+                x=["Intervention Completed", "Pending Intervention "],
+                orientation="h",
+                title="College-wise Intervention Status",
+                labels={"value": "Intervention Count", "variable": "Status"},
+                color_discrete_map={
+                    "Intervention Completed": "#28A745",
+                    "Pending Intervention ": "#E74C3C"
+                }
+            )
+
+            fig.update_layout(
+                barmode="stack",
+                xaxis_title="Intervention Count",
+                yaxis_title="College Name",
+                plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)",
+                xaxis=dict(showgrid=False),
+                yaxis=dict(showgrid=False),
+                title_x=0.0
+            )
+
             st.plotly_chart(fig, use_container_width=True)
+
         with c2:
+            #comp = int(round(filt_df['Intervention Completed'].sum()))
+            #pend = int(round(filt_df['Pending Intervention '].sum()))
             comp, pend = filt_df['Intervention Completed'].sum(), filt_df['Pending Intervention '].sum()
-            fig_pie = px.pie(values=[comp, pend], names=['Done', 'Pending'], title="Overall Status",
+            fig_pie = px.pie(values=[comp, pend], names=['Done', 'Pending'], title="Completion Percentage (%)",
                              color=['Done', 'Pending'], color_discrete_map={'Done': '#28A745', 'Pending': '#E74C3C'})
+            fig_pie.update_traces(
+                texttemplate='%{percent:.0%}',   # rounds 33.5% → 34%
+                hovertemplate='%{label}: %{value} (%{percent:.0%})'
+            )
+            fig_pie.update_layout(title_x=0.0)
             st.plotly_chart(fig_pie, use_container_width=True)
 
-elif st.session_state.page == "Assessment":
-    st.markdown("### 📋 Assessment & Detailed Records")
+elif st.session_state.page == "Academic Report":
+    #st.markdown("### 📋 College-Wise Academic Progress Report")
+    h1, h2 = st.columns([4, 1])
+    with h1:
+        st.markdown("### 📋 College-Wise Academic Progress Report")
+    with h2:
+        st.download_button(
+            "Download",
+            data=filt_df[['University Code', 'College Name', 'Trainer name', 'Batch No', 'Students Count',
+                      'Intervention Completed', 'Pending Intervention ',
+                      'Batch Wise Weekly Hours Completed', 'Pending Hours Per Batch', 'Completion %']]
+                .to_csv(index=False).encode('utf-8'),
+            file_name="College_Wise_Academic_Report.csv",
+            mime="text/csv"
+        )
+
     if filt_df.empty:
         st.warning("No data found for the selected filters.")
     else:
@@ -262,7 +440,92 @@ elif st.session_state.page == "Assessment":
             'Pending Hours Per Batch': '{:.1f}', 'Batch No': '{:.2f}'
         }), use_container_width=True, hide_index=True)
         
-        st.markdown("<br>")
-        st.download_button("📥 Download Filtered Assessment Data", 
-                           data=filt_df.to_csv(index=False).encode('utf-8'), 
-                           file_name="Assessment_Tracker.csv", use_container_width=True)
+    # ===============================
+    # 📊 WEEK-WISE INTERVENTION COUNT TABLE (WITH COLLEGE FILTER)
+    # ===============================
+    #st.markdown("### 📈 Weekly Intervention Completed")
+    h3, h4 = st.columns([4, 1])
+    with h3:
+        st.markdown("### 📈 Weekly Intervention Completed")
+    
+    week_cols = [col for col in filt_df.columns 
+                 if any(day in col for day in ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'])]
+
+    if len(week_cols) == 0:
+        st.warning("No weekday columns found for weekly calculation.")
+    else:
+        long_df = filt_df.melt(
+            id_vars=['College Name', 'Batch No'],
+            value_vars=week_cols,
+            var_name='Day',
+            value_name='Value'
+        )
+
+        long_df['Value'] = pd.to_numeric(long_df['Value'], errors='coerce').fillna(0)
+
+        long_df['Week'] = long_df['Day'].str.extract(r'\.(\d+)')
+        long_df['Week'] = long_df['Week'].fillna('0')
+        long_df['Week'] = long_df['Week'].astype(int) + 1
+
+        long_df['Week_Label'] = "Week " + long_df['Week'].astype(str)
+
+        weekly_interventions = (
+            long_df[long_df['Value'] > 0]
+            .groupby(['College Name', 'Batch No', 'Week_Label'])
+            .size()
+            .reset_index(name='Intervention Count')
+        )
+
+        if weekly_interventions.empty:
+            st.warning("No weekly intervention data available.")
+        else:
+            # 🔽 College + Batch filter for Weekly Intervention Completed Table
+            college_list = sorted(weekly_interventions['College Name'].unique())
+            col1, col2 = st.columns(2)
+
+            with col1:
+                selected_college_table = st.selectbox(
+                    "Select College for Weekly Table",
+                    ["All Colleges"] + college_list,
+                    key="weekly_table_college"
+                )
+
+            # Filter batch list based on college selection
+            if selected_college_table != "All Colleges":
+                batch_list = sorted(
+                    weekly_interventions[
+                        weekly_interventions['College Name'] == selected_college_table
+                    ]['Batch No'].dropna().unique()
+                )
+            else:
+                batch_list = sorted(weekly_interventions['Batch No'].dropna().unique())
+
+            with col2:
+                selected_batch_table = st.selectbox(
+                    "Select Batch for Weekly Table",
+                    ["All Batches"] + [str(b) for b in batch_list],
+                    key="weekly_table_batch"
+                )
+
+            # Apply filters
+            table_df = weekly_interventions.copy()
+            if selected_college_table != "All Colleges":
+                table_df = table_df[table_df['College Name'] == selected_college_table]
+
+            if selected_batch_table != "All Batches":
+                table_df = table_df[table_df['Batch No'].astype(str) == selected_batch_table]
+            # -------------------
+            # Move the download button to the heading row's right column
+            with h4:
+                st.download_button(
+                    "Download",
+                    data=table_df.to_csv(index=False).encode('utf-8') if 'table_df' in locals() else b"",
+                    file_name="Weekly_Intervention_Report.csv",
+                    mime="text/csv"
+                )
+            # Display table
+            st.dataframe(
+                table_df.sort_values(['College Name', 'Week_Label']),
+                use_container_width=True,
+                hide_index=True
+            )
